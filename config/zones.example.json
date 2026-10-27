@@ -1,0 +1,50 @@
+{
+  "zones": [],
+  "safe_zones": [
+    {
+      "name": "Armor Trader safe zone",
+      "x": 8342.02,
+      "z": 7806.61,
+      "radius": 150
+    }
+  ],
+  "rewards": {
+    "killstreak_tiers": {
+      "3": {
+        "type": "medical",
+        "items": [
+          "BandageDressing",
+          "Morphine"
+        ]
+      },
+      "5": {
+        "type": "armor",
+        "items": [
+          "Paragon_IOTV_Black"
+        ]
+      },
+      "10": {
+        "type": "rare",
+        "items": [
+          "SVD"
+        ]
+      }
+    },
+    "top_assassin_weekly": {
+      "items": [
+        "Paragon_Armored_H_Black"
+      ]
+    },
+    "top_assassin_monthly": {
+      "items": [
+        "Paragon_IOTV_Black"
+      ]
+    }
+  },
+  "options": {
+    "zone_edge_hysteresis_m": 10,
+    "reentry_cooldown_seconds": 300,
+    "announce_zone_entry": true,
+    "announce_kills": true
+  }
+}
