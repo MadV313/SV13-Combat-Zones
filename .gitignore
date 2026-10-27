@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+/data/
+*.sqlite3
+*.adm
+*.log
+*.pbo
+*.bikey
+*.bisign
