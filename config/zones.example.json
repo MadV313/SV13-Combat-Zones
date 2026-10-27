@@ -45,6 +45,7 @@
     "zone_edge_hysteresis_m": 10,
     "reentry_cooldown_seconds": 300,
     "announce_zone_entry": true,
-    "announce_kills": true
+    "announce_kills": true,
+    "max_kill_position_age_seconds": 360
   }
 }
