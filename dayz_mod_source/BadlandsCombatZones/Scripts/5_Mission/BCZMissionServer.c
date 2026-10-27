@@ -5,11 +5,13 @@ modded class MissionServer
  protected ref map<string,string> m_BCZ_Presence;
  protected ref map<string,float> m_BCZ_LastExit;
  protected float m_BCZ_Accumulator;
+ protected float m_BCZ_TelemetryAccumulator;
 
  override void OnInit()
  {
   super.OnInit();
   m_BCZ_Accumulator = 0;
+  m_BCZ_TelemetryAccumulator = 0;
   m_BCZ_Presence = new map<string,string>;
   m_BCZ_LastExit = new map<string,float>;
   string folder = "$profile:BadlandsCombatZones";
@@ -55,6 +57,9 @@ modded class MissionServer
  {
   super.OnUpdate(timeslice);
   if (!GetGame().IsServer() || !m_BCZ_Config) return;
+  m_BCZ_TelemetryAccumulator = m_BCZ_TelemetryAccumulator + timeslice;
+  bool sendTelemetry = m_BCZ_TelemetryAccumulator >= 10.0;
+  if (sendTelemetry) m_BCZ_TelemetryAccumulator = 0;
   m_BCZ_Accumulator = m_BCZ_Accumulator + timeslice;
   if (m_BCZ_Accumulator < 2.0) return;
   m_BCZ_Accumulator = 0;
@@ -67,6 +72,14 @@ modded class MissionServer
    string id = player.GetIdentity().GetId();
    if (id == "") continue;
    vector pos = player.GetPosition();
+   if (sendTelemetry)
+   {
+    string pname = player.GetIdentity().GetName();
+    pname.Replace("\"", "'");
+    pname.Replace("\n", " ");
+    pname.Replace("\r", " ");
+    GetGame().AdminLog("[BCZ] POS id=" + id + " name=\"" + pname + "\" x=" + pos[0] + " z=" + pos[2]);
+   }
    string oldZone = "";
    if (m_BCZ_Presence.Contains(id)) oldZone = m_BCZ_Presence.Get(id);
    string nextZone = BCZ_FindZone(pos[0],pos[2],oldZone);
