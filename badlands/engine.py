@@ -34,7 +34,8 @@ class Engine:
     if killer==victim:continue
     # Never credit without fresh position for both participants.
     a=self.db.one('SELECT x,z,seen_at FROM positions WHERE guid=?',(killer,));b=self.db.one('SELECT x,z,seen_at FROM positions WHERE guid=?',(victim,))
-    if not a or not b or now-a['seen_at']>360 or now-b['seen_at']>360:continue
+    max_age=float(self.config.get().get('options',{}).get('max_kill_position_age_seconds',360))
+    if not a or not b or now-a['seen_at']>max_age or now-b['seen_at']>max_age:continue
     ka=self.zone_for(a['x'],a['z']);kb=self.zone_for(b['x'],b['z'])
     if not ka or ka!=kb:continue
     key=hashlib.sha256(line.encode('utf8')).hexdigest()
