@@ -39,7 +39,10 @@ async def notice(kind,p):
 @tasks.loop(seconds=max(15,int(os.getenv('POLL_SECONDS','60'))))
 async def scan():
  try:
-  for line in await asyncio.to_thread(reader.new_lines):
+  # Only the network/file snapshot is retrieved off-thread. SQLite cursor state
+  # and engine updates must remain on the thread that created the DB connection.
+  snapshot = await asyncio.to_thread(reader.read_snapshot)
+  for line in reader.new_lines(snapshot):
    for kind,details in engine.handle(line):await notice(kind,details)
  except Exception:log.exception('ADM scan failed; no events credited')
 @scan.before_loop
