@@ -128,6 +128,19 @@ async def uav(i:discord.Interaction):
  rows=[dict(r) for r in db.all('SELECT x,z,seen_at FROM positions')];image=render(path,mx,mz,config.get()['zones'],rows)
  await i.response.send_message('Last logged positions only — may be several minutes old. Admin access only.',file=discord.File(image,'uav.png'),ephemeral=True)
 
+@bot.tree.command(name='setpositionage',description='Admin: maximum position age for PvP kill eligibility in seconds.')
+async def setpositionage(i:discord.Interaction,seconds:app_commands.Range[int,10,360]):
+ if not await admin(i):return
+ data=config.get();data.setdefault('options',{})['max_kill_position_age_seconds']=seconds;config.set(data)
+ await i.response.send_message(f'Maximum position age set to {seconds}s. Use 45s with tested 10s game-side telemetry; this does not change Nitrado playerlist frequency.',ephemeral=True)
+
+@bot.tree.command(name='playerstats',description='Look up any tracked DayZ survivor by name (Discord not required).')
+async def playerstats(i:discord.Interaction,name:str):
+ rows=db.all('SELECT p.name,p.guid,s.kills,s.deaths,s.streak,s.best_streak FROM players p LEFT JOIN stats s ON s.guid=p.guid WHERE p.name LIKE ? ORDER BY COALESCE(s.kills,0) DESC LIMIT 10',('%'+name+'%',))
+ if not rows:return await i.response.send_message('No matching observed survivor yet.',ephemeral=True)
+ msg='\n'.join(f'**{r["name"]}** | {r["kills"] or 0} kills | {r["deaths"] or 0} deaths | best streak {r["best_streak"] or 0}' for r in rows)
+ await i.response.send_message(msg[:1900],ephemeral=True)
+
 @bot.tree.command(name='health',description='Current integration/config status.')
 async def health(i:discord.Interaction):
  if not await admin(i):return
