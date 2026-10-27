@@ -107,8 +107,10 @@ class Reader:
         finally:
             client.close()
 
-    def new_lines(self):
-        name, data = self.read_snapshot()
+    def new_lines(self, snapshot=None):
+        # Accept an already-fetched snapshot so DB access stays on the bot's event-loop thread.
+        # None retains compatibility with existing synchronous consumers/tests.
+        name, data = self.read_snapshot() if snapshot is None else snapshot
         if data is None:
             return []
         row = self.db.one('SELECT remote_name,offset_bytes,tail FROM ingest WHERE id=1')
