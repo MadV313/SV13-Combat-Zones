@@ -1,4 +1,4 @@
-import json,time,math,hashlib
+import json,time,math,hashlib,os
 from .adm import parse
 class Engine:
  def __init__(self,db,config):self.db=db;self.config=config
@@ -29,7 +29,35 @@ class Engine:
      if new:
       cooldown=self.config.get().get('options',{}).get('reentry_cooldown_seconds',300)
       if not previous or now-(previous['last_exit'] or 0)>cooldown:events.append(('entry',{'name':v['name'],'zone':new,'guid':guid}))
+   elif typ=='verified_kill':
+    # Authoritative switch is opt-in: old ADM kill events are ignored when enabled.
+    if os.getenv('BCZ_AUTHORITATIVE_KILLS','0') != '1':continue
+    killer=v['kid'];victim=v['vid'];zone=v['zone'];streak=int(v['streak'])
+    if killer==victim or streak<1 or streak>100000:continue
+    if not any(z['name']==zone and z.get('enabled',True) for z in self.config.get()['zones']):continue
+    unique_key='bcz-event:'+v['event']
+    if self.db.one('SELECT 1 FROM kills WHERE unique_key=?',(unique_key,)):continue
+    for ident in (killer,victim):
+     if not self.db.one('SELECT 1 FROM players WHERE guid=?',(ident,)):self.db.player(ident,ident)
+     self.db.stat(ident)
+    self.db.execute('INSERT INTO kills(unique_key,killer,victim,zone,occurred_at) VALUES(?,?,?,?,?)',(unique_key,killer,victim,zone,now))
+    self.db.execute('UPDATE stats SET kills=kills+1,streak=?,best_streak=max(best_streak,?) WHERE guid=?',(streak,streak,killer))
+    self.db.execute('UPDATE stats SET deaths=deaths+1,streak=0 WHERE guid=?',(victim,))
+    kr=self.db.one('SELECT name FROM players WHERE guid=?',(killer,))
+    vr=self.db.one('SELECT name FROM players WHERE guid=?',(victim,))
+    events.append(('kill',{'killer':kr['name'],'victim':vr['name'],'zone':zone,'streak':streak}))
+   elif typ=='game_reward':
+    # Only server-side game receipts, not Discord commands, can assert physical delivery.
+    if os.getenv('BCZ_AUTHORITATIVE_KILLS','0') != '1':continue
+    grant=int(v['grant']); guid=v['id']; tier=int(v['tier']); status=v['status'].lower()
+    if grant<=0 or tier<1:continue
+    if self.db.one('SELECT 1 FROM game_grants WHERE grant_id=?',(grant,)):continue
+    self.db.execute('INSERT INTO game_grants(grant_id,guid,tier,status,seen_at) VALUES(?,?,?,?,?)',(grant,guid,tier,status,now))
+    if status=='delivered':
+     p=self.db.one('SELECT name FROM players WHERE guid=?',(guid,))
+     events.append(('game_reward',{'name':p['name'] if p else guid,'tier':tier}))
    elif typ=='kill':
+    if os.getenv('BCZ_AUTHORITATIVE_KILLS','0') == '1':continue
     killer=v['kid'];victim=v['vid'];self.db.player(killer,v['killer']);self.db.player(victim,v['victim'])
     if killer==victim:continue
     # Never credit without fresh position for both participants.

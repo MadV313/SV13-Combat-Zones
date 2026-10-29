@@ -29,3 +29,16 @@ def parse(line):
  # Boundary markers are for audit only. Position processing remains authoritative
  # for Discord zone state, preventing duplicate announcements from two log formats.
  return out
+
+# Live server-authenticated kills. Switch the engine to this source only AFTER the
+# DayZ companion mod is built and emitting these markers in the ADM log.
+BCZ_VERIFIED_KILL = re.compile(r'\[BCZ\] VERIFIED_KILL event=(?P<event>\d+) kid=(?P<kid>[^\s]+) vid=(?P<vid>[^\s]+) zone="(?P<zone>[^"\r\n]+)" streak=(?P<streak>\d+)',re.I)
+BCZ_GAME_REWARD = re.compile(r'\[BCZ\] REWARD grant=(?P<grant>\d+) id=(?P<id>[^\s]+) tier=(?P<tier>\d+) status=(?P<status>delivered|reserved|disabled|dry_run|failed)',re.I)
+_pre_event_parse = parse
+def parse(line):
+ out=_pre_event_parse(line)
+ m=BCZ_VERIFIED_KILL.search(line)
+ if m:out.append(('verified_kill',m.groupdict()))
+ m=BCZ_GAME_REWARD.search(line)
+ if m:out.append(('game_reward',m.groupdict()))
+ return out
