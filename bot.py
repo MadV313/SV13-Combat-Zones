@@ -33,6 +33,7 @@ async def notice(kind,p):
  if kind=='entry' and cfg.get('announce_zone_entry',True):msg=f'📡 **Combat zone activity:** A survivor entered **{p["zone"]}**.'
  elif kind=='kill' and cfg.get('announce_kills',True):msg=f'⚔️ **{p["killer"]}** eliminated **{p["victim"]}** at **{p["zone"]}** | streak **{p["streak"]}**.'
  elif kind=='reward':msg=f'🏆 **{p["name"]}** earned a **{p["tier"]}-kill reward** (pending in-game delivery).'
+ elif kind=='game_reward':msg=f'🏆 **{p["name"]}** received a physical **{p["tier"]}-kill reward crate in-game.'
  else:return
  try:await channel.send(msg,allowed_mentions=discord.AllowedMentions.none())
  except Exception:log.exception('Announcement failed')
@@ -112,7 +113,7 @@ async def linkplayer(i:discord.Interaction,player_guid:str,member:discord.Member
  db.execute('UPDATE players SET discord_id=? WHERE guid=?',(str(member.id),player_guid))
  await i.response.send_message('Linked verified log identity. Check player consent before assigning.',ephemeral=True)
 
-@bot.tree.command(name='pendingrewards',description='Admin audit of pending physical rewards; NO automatic spawning.')
+@bot.tree.command(name='pendingrewards',description='Admin audit of legacy bot pending rewards; use /gamerewards for game-side grants.')
 async def pendingrewards(i:discord.Interaction):
  if not await admin(i):return
  rows=db.all("SELECT r.id,p.name,r.kind,r.tier,r.items FROM rewards r LEFT JOIN players p ON p.guid=r.guid WHERE r.status='pending' ORDER BY r.id DESC LIMIT 20")
@@ -141,11 +142,18 @@ async def playerstats(i:discord.Interaction,name:str):
  msg='\n'.join(f'**{r["name"]}** | {r["kills"] or 0} kills | {r["deaths"] or 0} deaths | best streak {r["best_streak"] or 0}' for r in rows)
  await i.response.send_message(msg[:1900],ephemeral=True)
 
+@bot.tree.command(name='gamerewards',description='Admin: game-side reward receipts, independent of Discord linking.')
+async def gamerewards(i:discord.Interaction):
+ if not await admin(i):return
+ rows=db.all('SELECT g.grant_id,p.name,g.guid,g.tier,g.status FROM game_grants g LEFT JOIN players p ON p.guid=g.guid ORDER BY g.grant_id DESC LIMIT 20')
+ msg='\n'.join(f'#{r["grant_id"]} {r["name"] or r["guid"]}: streak {r["tier"]} = {r["status"]}' for r in rows)
+ await i.response.send_message(msg[:1900] or 'No game-side reward receipts yet.',ephemeral=True)
+
 @bot.tree.command(name='health',description='Current integration/config status.')
 async def health(i:discord.Interaction):
  if not await admin(i):return
  r=db.one('SELECT remote_name,offset_bytes FROM ingest WHERE id=1')
- await i.response.send_message(f'ADM cursor: `{r["remote_name"] or "not connected"}` at byte {r["offset_bytes"]}; zones={len(config.get()["zones"])}; poll={os.getenv("POLL_SECONDS","60")}s. In-game spawning NOT YET WIRED.',ephemeral=True)
+ await i.response.send_message(f'ADM cursor: `{r["remote_name"] or "not connected"}` at byte {r["offset_bytes"]}; zones={len(config.get()["zones"])}; poll={os.getenv("POLL_SECONDS","60")}s. In-game spawning requires compiled mod; authoritative kills={'ON' if os.getenv('BCZ_AUTHORITATIVE_KILLS','0')=='1' else 'OFF'}.',ephemeral=True)
 
 if __name__=='__main__':
  if not TOKEN:raise SystemExit('Set DISCORD_TOKEN')
