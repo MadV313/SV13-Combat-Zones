@@ -1,17 +1,20 @@
 class CfgPatches
 {
- class BadlandsCombatZones { units[]={}; weapons[]={}; requiredVersion=0.1; requiredAddons[]={"DZ_Data"}; };
+ class BadlandsCombatZones { units[] = {}; weapons[] = {}; requiredVersion = 0.1; requiredAddons[] = {"DZ_Data"}; };
 };
 class CfgMods
 {
  class BadlandsCombatZones
  {
-  dir="BadlandsCombatZones"; name="Badlands Combat Zones"; type="mod";
-  dependencies[]={"Game","World","Mission"};
+  dir = "BadlandsCombatZones";
+  name = "Badlands Combat Zones";
+  type = "mod";
+  dependencies[] = {"Game", "World", "Mission"};
   class defs
   {
-   class gameScriptModule { value=""; files[]={"BadlandsCombatZones/Scripts/3_Game"}; };
-   class missionScriptModule { value=""; files[]={"BadlandsCombatZones/Scripts/5_Mission"}; };
+   class gameScriptModule { value = ""; files[] = {"BadlandsCombatZones/Scripts/3_Game"}; };
+   class worldScriptModule { value = ""; files[] = {"BadlandsCombatZones/Scripts/4_World"}; };
+   class missionScriptModule { value = ""; files[] = {"BadlandsCombatZones/Scripts/5_Mission"}; };
   };
  };
 };
