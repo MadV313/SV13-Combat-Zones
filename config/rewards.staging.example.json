@@ -1,0 +1,12 @@
+{
+  "physical_rewards_enabled": false,
+  "dry_run": true,
+  "max_items_per_crate": 5,
+  "max_terrain_height_difference": 2.5,
+  "same_victim_cooldown_ms": 300000,
+  "tiers": [
+    {"streak": 3, "container": "SeaChest", "items": ["BandageDressing", "Morphine"]},
+    {"streak": 5, "container": "SeaChest", "items": ["Paragon_IOTV_Black"]},
+    {"streak": 10, "container": "SeaChest", "items": ["SVD"]}
+  ]
+}
