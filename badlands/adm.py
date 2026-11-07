@@ -26,8 +26,10 @@ def parse(line):
  out=_old_parse(line)
  m=BCZ_POSITION.search(line)
  if m:out.append(('position',m.groupdict()))
- # Boundary markers are for audit only. Position processing remains authoritative
- # for Discord zone state, preventing duplicate announcements from two log formats.
+ # Server-side boundary transitions are authoritative for zone notifications.
+ # Engine presence checks prevent duplicate notifications from position telemetry.
+ m=BCZ_BOUNDARY.search(line)
+ if m:out.append(('boundary',m.groupdict()))
  return out
 
 # Live server-authenticated kills. Switch the engine to this source only AFTER the

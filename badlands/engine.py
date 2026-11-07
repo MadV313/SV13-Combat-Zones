@@ -14,7 +14,32 @@ class Engine:
  def handle(self,line):
   events=[];now=time.time()
   for typ,v in parse(line):
-   if typ=='connect':self.db.player(v['id'],v['name'])
+   if typ=='boundary':
+    guid=v['id'];zone=v['zone'].strip();action=v['action'].upper()
+    # The marker comes from the DayZ server's ADM file, not a Discord message.
+    # Keep configured zone names synchronized to enable stats and kill credit.
+    if not any(z['name']==zone and z.get('enabled',True) for z in self.config.get()['zones']):
+     continue
+    prior=self.db.one('SELECT zone,entered_at,last_exit FROM presence WHERE guid=?',(guid,))
+    previous=prior['zone'] if prior else None
+    name_row=self.db.one('SELECT name FROM players WHERE guid=?',(guid,))
+    name=name_row['name'] if name_row else 'Survivor'
+    if not name_row:self.db.player(guid,name)
+    if action=='ENTER' and previous!=zone:
+     # Preserve normal re-entry cooldown; never announce a duplicate entry.
+     if previous:
+      self.db.stat(guid)
+      self.db.execute('UPDATE stats SET zone_seconds=zone_seconds+? WHERE guid=?',(max(0,now-prior['entered_at']),guid))
+     self.db.execute('INSERT INTO presence(guid,zone,entered_at,last_exit) VALUES(?,?,?,?) ON CONFLICT(guid) DO UPDATE SET zone=excluded.zone,entered_at=excluded.entered_at',(guid,zone,now,prior['last_exit'] if prior else 0))
+     cooldown=self.config.get().get('options',{}).get('reentry_cooldown_seconds',300)
+     if not prior or now-(prior['last_exit'] or 0)>cooldown:
+      events.append(('entry',{'name':name,'zone':zone,'guid':guid}))
+    elif action=='EXIT' and previous==zone:
+     self.db.stat(guid)
+     self.db.execute('UPDATE stats SET zone_seconds=zone_seconds+? WHERE guid=?',(max(0,now-prior['entered_at']),guid))
+     self.db.execute('UPDATE presence SET zone=NULL,last_exit=? WHERE guid=?',(now,guid))
+     events.append(('exit',{'name':name,'zone':zone,'guid':guid}))
+   elif typ=='connect':self.db.player(v['id'],v['name'])
    elif typ=='position':
     guid=v['id'];self.db.player(guid,v['name']);x=float(v['x']);z=float(v['z'])
     self.db.execute('INSERT INTO positions VALUES(?,?,?,?) ON CONFLICT(guid) DO UPDATE SET x=excluded.x,z=excluded.z,seen_at=excluded.seen_at',(guid,x,z,now))
