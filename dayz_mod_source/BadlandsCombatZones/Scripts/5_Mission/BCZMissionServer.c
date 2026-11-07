@@ -115,7 +115,14 @@ modded class MissionServer
    if (!zone || !zone.enabled || zone.radius <= 10) continue;
    float dx=x-zone.x;float dz=z-zone.z;
    float r=zone.radius;
-   if (current == zone.name) r=r+10;else r=r-10;
+   if (current == zone.name)
+   {
+    r = r + 10;
+   }
+   else
+   {
+    r = r - 10;
+   }
    if(dx*dx+dz*dz<=r*r) return zone.name;
   }
   return "";
@@ -297,10 +304,16 @@ modded class MissionServer
    }
   }
   // Remove disconnected players rather than leaving ghost combat-zone sessions.
-  for(int i=m_BCZ_Presence.Count()-1;i>=0;i=i-1)
+  // Walk backwards so map key removal cannot skip an entry.
+  int presenceIndex = m_BCZ_Presence.Count();
+  while (presenceIndex > 0)
   {
-   string guid=m_BCZ_Presence.GetKey(i);
-   if(!currentlyOnline.Contains(guid))m_BCZ_Presence.Remove(guid);
+   presenceIndex = presenceIndex - 1;
+   string guid = m_BCZ_Presence.GetKey(presenceIndex);
+   if (!currentlyOnline.Contains(guid))
+   {
+    m_BCZ_Presence.Remove(guid);
+   }
   }
  }
 };
