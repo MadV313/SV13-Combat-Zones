@@ -1,5 +1,13 @@
 {
-  "zones": [],
+  "zones": [
+    {
+      "name": "ComeGetSome",
+      "x": 4154.0,
+      "z": 5382.0,
+      "radius": 200,
+      "enabled": true
+    }
+  ],
   "safe_zones": [
     {
       "name": "Armor Trader safe zone",
