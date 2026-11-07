@@ -24,13 +24,18 @@ async def admin(i):
   await i.response.send_message('Admin role or Manage Server required.',ephemeral=True);return False
  return True
 async def notice(kind,p):
- if not ANNOUNCE_CHANNEL_ID:return
+ if not ANNOUNCE_CHANNEL_ID:
+  log.warning('ANNOUNCE_CHANNEL_ID is missing; cannot post %s',kind)
+  return
  channel=bot.get_channel(ANNOUNCE_CHANNEL_ID)
  if channel is None:
   try:channel=await bot.fetch_channel(ANNOUNCE_CHANNEL_ID)
-  except Exception:return
+  except Exception:
+   log.exception('Could not resolve announcement channel %s',ANNOUNCE_CHANNEL_ID)
+   return
  cfg=config.get().get('options',{})
  if kind=='entry' and cfg.get('announce_zone_entry',True):msg=f'📡 **Combat zone activity:** A survivor entered **{p["zone"]}**.'
+ elif kind=='exit' and cfg.get('announce_zone_exit',True):msg=f'📡 **Combat zone cleared:** A survivor left **{p["zone"]}**.'
  elif kind=='kill' and cfg.get('announce_kills',True):msg=f'⚔️ **{p["killer"]}** eliminated **{p["victim"]}** at **{p["zone"]}** | streak **{p["streak"]}**.'
  elif kind=='reward':msg=f'🏆 **{p["name"]}** earned a **{p["tier"]}-kill reward** (pending in-game delivery).'
  elif kind=='game_reward':msg=f'🏆 **{p["name"]}** received a physical **{p["tier"]}-kill reward crate in-game.'
@@ -43,8 +48,12 @@ async def scan():
   # Only the network/file snapshot is retrieved off-thread. SQLite cursor state
   # and engine updates must remain on the thread that created the DB connection.
   snapshot = await asyncio.to_thread(reader.read_snapshot)
-  for line in reader.new_lines(snapshot):
-   for kind,details in engine.handle(line):await notice(kind,details)
+  lines=reader.new_lines(snapshot)
+  if lines:log.info('ADM scan: processing %s new lines',len(lines))
+  for line in lines:
+   for kind,details in engine.handle(line):
+    log.info('BCZ event parsed: %s zone=%s',kind,details.get('zone','n/a'))
+    await notice(kind,details)
  except Exception:log.exception('ADM scan failed; no events credited')
 @scan.before_loop
 async def wait_ready():await bot.wait_until_ready()
