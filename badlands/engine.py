@@ -1,7 +1,7 @@
 import json,time,math,hashlib,os
 from .adm import parse
 class Engine:
- def __init__(self,db,config):self.db=db;self.config=config
+ def __init__(self,db,config):self.db=db;self.config=config;self.boundaries_seen=False;self.last_pvp_death=None
  def zone_for(self,x,z,current=None):
   cfg=self.config.get();edge=float(cfg.get('options',{}).get('zone_edge_hysteresis_m',10))
   for safe in cfg.get('safe_zones',[]):
@@ -15,6 +15,7 @@ class Engine:
   events=[];now=time.time()
   for typ,v in parse(line):
    if typ=='boundary':
+    self.boundaries_seen=True
     guid=v['id'];zone=v['zone'].strip();action=v['action'].upper()
     # The marker comes from the DayZ server's ADM file, not a Discord message.
     # Keep configured zone names synchronized to enable stats and kill credit.
@@ -40,9 +41,23 @@ class Engine:
      self.db.execute('UPDATE presence SET zone=NULL,last_exit=? WHERE guid=?',(now,guid))
      events.append(('exit',{'name':name,'zone':zone,'guid':guid}))
    elif typ=='connect':self.db.player(v['id'],v['name'])
+   elif typ=='death':
+    # A death/respawn is NOT a zone departure. Clear presence silently, so
+    # stale ADM snapshots cannot create a bogus EXIT notification later.
+    self.db.player(v['id'],v['name'])
+    self.last_pvp_death=v
+    if v.get('killer_id') and v.get('killer_name'):
+     self.db.player(v['killer_id'],v['killer_name'])
+    self.db.execute('UPDATE presence SET zone=NULL,last_exit=? WHERE guid=?',(now,v['id']))
+    self.db.execute('UPDATE stats SET streak=0 WHERE guid=?',(v['id'],))
    elif typ=='position':
     guid=v['id'];self.db.player(guid,v['name']);x=float(v['x']);z=float(v['z'])
     self.db.execute('INSERT INTO positions VALUES(?,?,?,?) ON CONFLICT(guid) DO UPDATE SET x=excluded.x,z=excluded.z,seen_at=excluded.seen_at',(guid,x,z,now))
+    # Position telemetry is still useful for /uav and names. But when the
+    # server is emitting boundary markers, ONLY those markers drive alerts.
+    # BCZ_BOUNDARY_SOURCE=server enforces this even on a cold Railway restart.
+    boundary_source=os.getenv('BCZ_BOUNDARY_SOURCE','auto').strip().lower()
+    if boundary_source=='server' or (boundary_source=='auto' and self.boundaries_seen):continue
     previous=self.db.one('SELECT zone,entered_at,last_exit FROM presence WHERE guid=?',(guid,));prev=previous['zone'] if previous else None
     new=self.zone_for(x,z,prev)
     if new!=prev:
@@ -70,7 +85,16 @@ class Engine:
     self.db.execute('UPDATE stats SET deaths=deaths+1,streak=0 WHERE guid=?',(victim,))
     kr=self.db.one('SELECT name FROM players WHERE guid=?',(killer,))
     vr=self.db.one('SELECT name FROM players WHERE guid=?',(victim,))
-    events.append(('kill',{'killer':kr['name'],'victim':vr['name'],'zone':zone,'streak':streak}))
+    details={'killer':kr['name'],'victim':vr['name'],'zone':zone,'streak':streak,
+             'killer_guid':killer,'victim_guid':victim,'event_id':v['event']}
+    # The ADM normal death record usually precedes the BCZ VERIFIED_KILL line
+    # in the same server second. Enrich the embed only if both IDs and the log
+    # timestamp match; never invent a location, weapon or distance.
+    last=self.last_pvp_death
+    if last and v.get('clock') and last.get('clock')==v.get('clock') and last.get('id')==victim and last.get('killer_id')==killer:
+     for key in ('x','z','weapon','distance'):
+      if last.get(key):details[key]=last[key]
+    events.append(('kill',details))
    elif typ=='game_reward':
     # Only server-side game receipts, not Discord commands, can assert physical delivery.
     if os.getenv('BCZ_AUTHORITATIVE_KILLS','0') != '1':continue
