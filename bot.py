@@ -8,6 +8,7 @@ from badlands.config import Config
 from badlands.db import DB
 from badlands.ingest import Reader
 from badlands.engine import Engine
+from badlands.announcements import make as make_announcement
 
 load_dotenv();logging.basicConfig(level=logging.INFO)
 log=logging.getLogger('badlands')
@@ -24,6 +25,13 @@ async def admin(i):
   await i.response.send_message('Admin role or Manage Server required.',ephemeral=True);return False
  return True
 async def notice(kind,p):
+ cfg=config.get()
+ enabled=cfg.get('options',{})
+ if kind=='entry' and not enabled.get('announce_zone_entry',True):return
+ if kind=='exit' and not enabled.get('announce_zone_exit',True):return
+ if kind=='kill' and not enabled.get('announce_kills',True):return
+ spec=make_announcement(kind,p,cfg.get('zones',[]))
+ if not spec:return
  if not ANNOUNCE_CHANNEL_ID:
   log.warning('ANNOUNCE_CHANNEL_ID is missing; cannot post %s',kind)
   return
@@ -33,15 +41,17 @@ async def notice(kind,p):
   except Exception:
    log.exception('Could not resolve announcement channel %s',ANNOUNCE_CHANNEL_ID)
    return
- cfg=config.get().get('options',{})
- if kind=='entry' and cfg.get('announce_zone_entry',True):msg=f'📡 **Combat zone activity:** A survivor entered **{p["zone"]}**.'
- elif kind=='exit' and cfg.get('announce_zone_exit',True):msg=f'📡 **Combat zone cleared:** A survivor left **{p["zone"]}**.'
- elif kind=='kill' and cfg.get('announce_kills',True):msg=f'⚔️ **{p["killer"]}** eliminated **{p["victim"]}** at **{p["zone"]}** | streak **{p["streak"]}**.'
- elif kind=='reward':msg=f'🏆 **{p["name"]}** earned a **{p["tier"]}-kill reward** (pending in-game delivery).'
- elif kind=='game_reward':msg=f'🏆 **{p["name"]}** received a physical **{p["tier"]}-kill reward crate in-game.'
- else:return
- try:await channel.send(msg,allowed_mentions=discord.AllowedMentions.none())
- except Exception:log.exception('Announcement failed')
+ embed=discord.Embed(title=spec['title'],description=spec['description'],color=spec['color'])
+ for field_name,field_value,is_inline in spec['fields']:
+  embed.add_field(name=field_name,value=field_value,inline=is_inline)
+ embed.set_footer(text=spec['footer'])
+ try:
+  await channel.send(embed=embed,allowed_mentions=discord.AllowedMentions.none())
+ except discord.Forbidden:
+  log.exception('Announcement failed: Discord channel %s needs Send Messages and Embed Links permissions',ANNOUNCE_CHANNEL_ID)
+ except Exception:
+  log.exception('Announcement failed for %s',kind)
+
 @tasks.loop(seconds=max(15,int(os.getenv('POLL_SECONDS','60'))))
 async def scan():
  try:
@@ -61,6 +71,9 @@ async def wait_ready():await bot.wait_until_ready()
 async def on_ready():
  if not scan.is_running():scan.start()
  log.info('Ready as %s',bot.user)
+ log.info('BCZ modes: authoritative_kills=%s boundary_source=%s',os.getenv('BCZ_AUTHORITATIVE_KILLS','0'),os.getenv('BCZ_BOUNDARY_SOURCE','auto'))
+ if os.getenv('BCZ_AUTHORITATIVE_KILLS','0') != '1':
+  log.warning('Server emits BCZ VERIFIED_KILL, but BCZ_AUTHORITATIVE_KILLS is not 1; Discord will not credit these server streaks')
 @bot.event
 async def setup_hook():
  if GUILD_ID:
